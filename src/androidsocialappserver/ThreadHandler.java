@@ -118,6 +118,22 @@ class ThreadHandler extends Thread {
                             if(result.getString("Lastname") != null)
                                 output.writeUTF(result.getString("Lastname"));
                             else output.writeUTF("");
+                            if(result.getString("Avatar") != null){
+                                String avatarPath = result.getString("Avatar");
+                                byte[] imageInByte;
+                                BufferedImage originalImage = ImageIO.read(new File(avatarPath));
+                                try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                                    ImageIO.write(originalImage, "jpg", baos);
+                                    baos.flush();
+                                    imageInByte = baos.toByteArray();
+                                }
+                                
+                                int avatarLength = imageInByte.length;
+                                output.writeInt(avatarLength);
+                                output.write(imageInByte, 0, avatarLength);
+                                output.flush();
+                            }
+                            else output.writeInt(0);
                             output.flush();
                             break;
                         }
@@ -127,23 +143,39 @@ class ThreadHandler extends Thread {
                             String firstName = input.readUTF();
                             String lastName = input.readUTF();
                             String email = input.readUTF();
-                            int avatarSize = input.read();
-                            byte[] avatar = new byte[2520583];
-                            input.read(avatar);
-                            
-                            InputStream in = new ByteArrayInputStream(avatar);
-			BufferedImage bImageFromConvert = ImageIO.read(in);
+                            int avatarSize = input.readInt();
+                            String photoName = null;
+                            if(avatarSize != 0){
+                                byte[] avatar = new byte[avatarSize];
+                                input.readFully(avatar, 0, avatarSize);
 
-			ImageIO.write(bImageFromConvert, "jpg", new File(
-					"c:/new-darksouls.jpg"));
+
+                                InputStream in = new ByteArrayInputStream(avatar);
+                                BufferedImage bImageFromConvert = ImageIO.read(in);
+
+                                photoName = "E:/SocialAppAvatars/"+this.loggedUser+"_"+System.currentTimeMillis()+".jpg";
+                                ImageIO.write(bImageFromConvert, "jpg", new File(
+                                                photoName));
+                            }
                             
-                            String sql = "UPDATE users SET Firstname=?,Lastname=?,Email=? WHERE User = ? ";
-                            PreparedStatement statement = dbConnection.prepareStatement(sql);
-                            statement.setString(1,firstName);
-                            statement.setString(2,lastName);
-                            statement.setString(3,email);
-                            statement.setString(4,this.loggedUser);
-                            statement.executeUpdate();
+                            if(avatarSize != 0){
+                                String sql = "UPDATE users SET Firstname=?,Lastname=?,Email=?,Avatar=? WHERE User = ? ";
+                                PreparedStatement statement = dbConnection.prepareStatement(sql);
+                                statement.setString(1,firstName);
+                                statement.setString(2,lastName);
+                                statement.setString(3,email);
+                                statement.setString(4, photoName);
+                                statement.setString(5,this.loggedUser);
+                                statement.executeUpdate();
+                            }else{
+                                String sql = "UPDATE users SET Firstname=?,Lastname=?,Email=? WHERE User = ? ";
+                                PreparedStatement statement = dbConnection.prepareStatement(sql);
+                                statement.setString(1,firstName);
+                                statement.setString(2,lastName);
+                                statement.setString(3,email);
+                                statement.setString(4,this.loggedUser);
+                                statement.executeUpdate();
+                            }
                             break;
                         }
                     default:
