@@ -26,6 +26,7 @@ class ThreadHandler extends Thread {
     private Connection dbConnection;
     private final int clientNumber;
     private String loggedUser;
+    private Integer loggedUserId;
 
     ThreadHandler(Socket s, int v,Connection DB) {
         socket = s;
@@ -64,9 +65,12 @@ class ThreadHandler extends Thread {
                                 System.out.println("Nu am putut loga userul, datele nu se potrivesc");
                             }
                             else {
+                                result.next();
                                 this.loggedUser = username;
+                                this.loggedUserId = result.getInt("idUser");
                                 output.write(1);
-                            }       output.flush();
+                            }       
+                            output.flush();
                             break;
                         }
                     case 2:
@@ -133,8 +137,10 @@ class ThreadHandler extends Thread {
                                 output.write(imageInByte, 0, avatarLength);
                                 output.flush();
                             }
-                            else output.writeInt(0);
-                            output.flush();
+                            else {
+                                output.writeInt(0);
+                                output.flush();
+                            }
                             break;
                         }
                     case 4:
@@ -178,6 +184,44 @@ class ThreadHandler extends Thread {
                             }
                             break;
                         }
+                    case 5:
+                        {
+                            System.out.println("Am primit comanda 5.(CERERE FRIEND LIST)");
+                            String sql = "Select User,Avatar from users where idUser In (SELECT idFriend FROM users u natural join friends f where u.idUser = ?) ;";
+                            PreparedStatement statement = dbConnection.prepareStatement(sql);
+                            statement.setInt(1,this.loggedUserId);
+                            ResultSet result = statement.executeQuery();
+                            
+                            result.last();
+                            output.writeInt(result.getRow());
+                            
+                            result.beforeFirst();
+                            while(result.next()){
+                                String friendName = result.getString("User");
+                                output.writeUTF(friendName);
+                                
+                                if(result.getString("Avatar") != null){
+                                    String avatarPath = result.getString("Avatar");
+                                    byte[] imageInByte;
+                                    BufferedImage originalImage = ImageIO.read(new File(avatarPath));
+                                    try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                                        ImageIO.write(originalImage, "jpg", baos);
+                                        baos.flush();
+                                        imageInByte = baos.toByteArray();
+                                    }
+
+                                    int avatarLength = imageInByte.length;
+                                    output.writeInt(avatarLength);
+                                    output.write(imageInByte, 0, avatarLength);
+                                    output.flush();
+                                }
+                                else {
+                                    output.writeInt(0);
+                                    output.flush();
+                                }
+                            }
+                            break;
+                        }
                     default:
                         break;
                 }
@@ -190,6 +234,5 @@ class ThreadHandler extends Thread {
         } catch (SQLException ex) {
             Logger.getLogger(ThreadHandler.class.getName()).log(Level.SEVERE, null, ex);
         }
-
     }
 }
