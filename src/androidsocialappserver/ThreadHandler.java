@@ -187,7 +187,7 @@ class ThreadHandler extends Thread {
                     case 5:
                         {
                             System.out.println("Am primit comanda 5.(CERERE FRIEND LIST)");
-                            String sql = "Select User,Avatar from users where idUser In (SELECT idFriend FROM users u natural join friends f where u.idUser = ?) ;";
+                            String sql = "Select distinct idFriend,User,Avatar from users join friends on users.idUser = friends.idFriend where users.idUser In (SELECT idFriend FROM users u natural join friends f where u.idUser = ?) and users.idUser = friends.idFriend ;";
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
                             statement.setInt(1,this.loggedUserId);
                             ResultSet result = statement.executeQuery();
@@ -197,6 +197,9 @@ class ThreadHandler extends Thread {
                             
                             result.beforeFirst();
                             while(result.next()){
+                                Integer friendId = result.getInt("idFriend");
+                                output.writeInt(friendId);
+                                
                                 String friendName = result.getString("User");
                                 output.writeUTF(friendName);
                                 
@@ -220,6 +223,57 @@ class ThreadHandler extends Thread {
                                     output.flush();
                                 }
                             }
+                            break;
+                        }
+                    case 6:
+                        {
+                            System.out.println("Am primit comanda 6.(DELETE USER)");
+                            Integer userToBeDeleted = input.readInt();
+                            
+                            String sql = "DELETE from friends WHERE idUser = ? AND idFriend = ? ";
+                            PreparedStatement statement = dbConnection.prepareStatement(sql);
+                            statement.setInt(1,this.loggedUserId);
+                            statement.setInt(2,userToBeDeleted);
+                            statement.executeUpdate();
+                            
+                            sql = "DELETE from friends WHERE idUser = ? AND idFriend = ? ";
+                            PreparedStatement statement2 = dbConnection.prepareStatement(sql);
+                            statement2.setInt(1,userToBeDeleted);
+                            statement2.setInt(2,this.loggedUserId);
+                            statement2.executeUpdate();
+                            break;
+                        }
+                    case 7:
+                        {
+                            System.out.println("Am primit comanda 7.(ADD FRIEND LIST)");
+                            String userToBeAdded = input.readUTF();
+                            
+                            String sql = "SELECT * from users WHERE User = ? ";
+                            PreparedStatement statement = dbConnection.prepareStatement(sql);
+                            statement.setString(1,userToBeAdded);
+                            ResultSet result = statement.executeQuery();
+                            if (!result.isBeforeFirst() ) {
+                                output.writeInt(-1);
+                                System.out.println("Nu am gasit userul dorit in lista de utilizatori.");
+                            }
+                            else {
+                                result.next();
+                                sql = "INSERT INTO friends(idUser,idFriend) VALUES (?,?) ";
+                                PreparedStatement statementRegister = dbConnection.prepareStatement(sql);
+                                statementRegister.setInt(1,this.loggedUserId);
+                                statementRegister.setInt(2,result.getInt("idUser"));
+                                statementRegister.executeUpdate();
+                                
+                                sql = "INSERT INTO friends(idFriend,idUser) VALUES (?,?) ";
+                                PreparedStatement statementRegister2 = dbConnection.prepareStatement(sql);
+                                statementRegister2.setInt(1,this.loggedUserId);
+                                statementRegister2.setInt(2,result.getInt("idUser"));
+                                statementRegister2.executeUpdate();
+                                
+                                
+                                output.writeInt(1);
+                            }
+                            output.flush();
                             break;
                         }
                     default:
