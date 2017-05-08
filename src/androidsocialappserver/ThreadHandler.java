@@ -17,6 +17,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
@@ -40,13 +42,26 @@ class ThreadHandler extends Thread {
         try {
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             DataInputStream input = new DataInputStream(socket.getInputStream());
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             
             boolean moreData = true;
-            int optionValue;
+            int optionValue = 0;
 
             while (moreData) {
                 
                 optionValue = input.read();
+                System.out.println(optionValue);
+                if(optionValue == -1){
+                    if(!this.loggedUser.isEmpty()){
+                        String sql = "UPDATE users SET Loged=0 WHERE User =  ?";
+                        PreparedStatement makeOffline = dbConnection.prepareStatement(sql);
+                        makeOffline.setString(1,this.loggedUser);
+                        makeOffline.executeUpdate();
+                    }
+                        
+                    break;
+                }
+                
                 
                 switch (optionValue) {
                     case 1:
@@ -68,6 +83,10 @@ class ThreadHandler extends Thread {
                                 result.next();
                                 this.loggedUser = username;
                                 this.loggedUserId = result.getInt("idUser");
+                                sql = "UPDATE users SET Loged=1 WHERE User =  ?";
+                                PreparedStatement makeOnline = dbConnection.prepareStatement(sql);
+                                makeOnline.setString(1,this.loggedUser);
+                                makeOnline.executeUpdate();
                                 output.write(1);
                             }       
                             output.flush();
@@ -187,7 +206,7 @@ class ThreadHandler extends Thread {
                     case 5:
                         {
                             System.out.println("Am primit comanda 5.(CERERE FRIEND LIST)");
-                            String sql = "Select distinct idFriend,User,Avatar from users join friends on users.idUser = friends.idFriend where users.idUser In (SELECT idFriend FROM users u natural join friends f where u.idUser = ?) and users.idUser = friends.idFriend ;";
+                            String sql = "Select distinct idFriend,User,Avatar,Loged from users join friends on users.idUser = friends.idFriend where users.idUser In (SELECT idFriend FROM users u natural join friends f where u.idUser = ?) and users.idUser = friends.idFriend ;";
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
                             statement.setInt(1,this.loggedUserId);
                             ResultSet result = statement.executeQuery();
@@ -202,6 +221,9 @@ class ThreadHandler extends Thread {
                                 
                                 String friendName = result.getString("User");
                                 output.writeUTF(friendName);
+                                
+                                Integer friendStatus = result.getInt("Loged");
+                                output.writeInt(friendStatus);
                                 
                                 if(result.getString("Avatar") != null){
                                     String avatarPath = result.getString("Avatar");
@@ -274,6 +296,80 @@ class ThreadHandler extends Thread {
                                 output.writeInt(1);
                             }
                             output.flush();
+                            break;
+                        }
+                    case 8:
+                        {
+                            System.out.println("Am primit comanda 8.(CHAT)");
+                            
+                            String userToChat = input.readUTF();
+                            
+                            String bdSearch = this.loggedUser+"_"+userToChat;
+                            String bdSearch2 = userToChat+"_"+this.loggedUser;
+                            
+                            String sql = "SELECT * from conversations WHERE usersname = ? or usersname = ?";
+                            PreparedStatement statement = dbConnection.prepareStatement(sql);
+                            statement.setString(1,bdSearch);
+                            statement.setString(2, bdSearch2);
+                            ResultSet result = statement.executeQuery();
+                            if (!result.isBeforeFirst() ) {
+                                output.writeInt(-1);
+                                
+                                sql = "INSERT INTO conversations(usersname,conversationPath) VALUES (?,?) ";
+                                PreparedStatement statementAdd = dbConnection.prepareStatement(sql);
+                                statementAdd.setString(1,this.loggedUser+"_"+userToChat);
+                                BufferedWriter writer = null;
+                                
+                                File logFile = new File("E:\\SocialAppAvatars\\"+this.loggedUser+"_"+userToChat+".txt");
+
+                                writer = new BufferedWriter(new FileWriter(logFile));
+                                statementAdd.setString(2,logFile.getAbsolutePath());
+                                statementAdd.executeUpdate();
+                                writer.close();
+                            }
+                            else {
+                                result.next();
+                                String conversationPath = result.getString("conversationPath");
+                                List<String> myConversation = new ArrayList<>();
+                                try (BufferedReader br = new BufferedReader(new FileReader(conversationPath))) {
+                                    String line;
+                                    while ((line = br.readLine()) != null) {
+                                       myConversation.add(line);
+                                    }
+                                }
+                                
+                                output.writeInt(myConversation.size());
+                                for(String eachMessage : myConversation)
+                                    output.writeUTF(eachMessage);
+                            }       
+                            output.flush();
+                            break;
+                        }
+                    case 9:
+                        {
+                            System.out.println("Am primit comanda 9.(TRIMITERE MESAJ CHAT)");
+                            
+                            String userToChat = input.readUTF();
+                            String message = input.readUTF();
+                            
+                            String bdSearch = this.loggedUser+"_"+userToChat;
+                            String bdSearch2 = userToChat+"_"+this.loggedUser;
+                            
+                            String sql = "SELECT * from conversations WHERE usersname = ? or usersname = ?";
+                            PreparedStatement statement = dbConnection.prepareStatement(sql);
+                            statement.setString(1,bdSearch);
+                            statement.setString(2, bdSearch2);
+                            ResultSet result = statement.executeQuery();
+                            
+                            result.next();
+                            String conversationPath = result.getString("conversationPath");
+                            
+                            BufferedWriter writer = null;
+                            writer = new BufferedWriter(new FileWriter(conversationPath, true));
+                            writer.write("\n");
+                            writer.write(this.loggedUser+" "+message);
+                            writer.close();
+                            
                             break;
                         }
                     default:
