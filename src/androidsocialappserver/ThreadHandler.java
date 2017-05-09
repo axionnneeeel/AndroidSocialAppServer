@@ -19,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
@@ -42,7 +43,6 @@ class ThreadHandler extends Thread {
         try {
             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
             DataInputStream input = new DataInputStream(socket.getInputStream());
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             
             boolean moreData = true;
             int optionValue = 0;
@@ -50,13 +50,13 @@ class ThreadHandler extends Thread {
             while (moreData) {
                 
                 optionValue = input.read();
-                System.out.println(optionValue);
                 if(optionValue == -1){
                     if(!this.loggedUser.isEmpty()){
                         String sql = "UPDATE users SET Loged=0 WHERE User =  ?";
                         PreparedStatement makeOffline = dbConnection.prepareStatement(sql);
                         makeOffline.setString(1,this.loggedUser);
                         makeOffline.executeUpdate();
+                        Controller.onlineUsers.remove(this.loggedUser);
                     }
                         
                     break;
@@ -69,6 +69,7 @@ class ThreadHandler extends Thread {
                             System.out.println("Am primit comanda 1.(LOGIN)");
                             String username = input.readUTF();
                             String password = input.readUTF();
+                            output.write(1);
                             System.out.println("Am primit datele: User: "+username+" Password: "+password+". Verific in BD.");
                             String sql = "SELECT * from users WHERE User = ? and Password = ?";
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
@@ -84,6 +85,8 @@ class ThreadHandler extends Thread {
                                 this.loggedUser = username;
                                 this.loggedUserId = result.getInt("idUser");
                                 sql = "UPDATE users SET Loged=1 WHERE User =  ?";
+                                Controller.onlineUsers.put(this.loggedUser, socket);
+                                
                                 PreparedStatement makeOnline = dbConnection.prepareStatement(sql);
                                 makeOnline.setString(1,this.loggedUser);
                                 makeOnline.executeUpdate();
@@ -212,6 +215,7 @@ class ThreadHandler extends Thread {
                             ResultSet result = statement.executeQuery();
                             
                             result.last();
+                            output.write(5);
                             output.writeInt(result.getRow());
                             
                             result.beforeFirst();
@@ -370,6 +374,52 @@ class ThreadHandler extends Thread {
                             writer.write(this.loggedUser+" "+message);
                             writer.close();
                             
+                            /*for (Map.Entry<String, Socket> entry : Controller.onlineUsers.entrySet()) { 
+                                if(entry.getKey().equals(userToChat)){
+                                    System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
+                                    DataOutputStream outputClient = new DataOutputStream(entry.getValue().getOutputStream());
+                                    outputClient.writeUTF(message);
+                                    outputClient.flush();
+                                    
+                                }
+                            }*/
+                            
+                            break;
+                        }
+                    case 10:
+                        {
+                            System.out.println("Am primit comanda 10.(ACTUALIZARE CHAT)");
+                            
+                            String userToChat = input.readUTF();
+                            Integer numberOfMessages = input.readInt();
+                            
+                            String bdSearch = this.loggedUser+"_"+userToChat;
+                            String bdSearch2 = userToChat+"_"+this.loggedUser;
+                            
+                            String sql = "SELECT * from conversations WHERE usersname = ? or usersname = ?";
+                            PreparedStatement statement = dbConnection.prepareStatement(sql);
+                            statement.setString(1,bdSearch);
+                            statement.setString(2, bdSearch2);
+                            ResultSet result = statement.executeQuery();
+                            
+                            result.next();
+                            String conversationPath = result.getString("conversationPath");
+                            List<String> myConversation = new ArrayList<>();
+                            try (BufferedReader br = new BufferedReader(new FileReader(conversationPath))) {
+                                String line;
+                                while ((line = br.readLine()) != null) {
+                                   myConversation.add(line);
+                                }
+                            }
+
+                            
+                            output.writeInt(myConversation.size() - numberOfMessages);
+                            if(myConversation.size() - numberOfMessages > 0){
+                                for(int i=numberOfMessages;i<myConversation.size();i++)
+                                    output.writeUTF(myConversation.get(i));
+                            }
+                               
+                            output.flush();
                             break;
                         }
                     default:

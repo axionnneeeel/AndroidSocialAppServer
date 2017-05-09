@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,6 +20,7 @@ import java.util.logging.Logger;
  */
 public class Controller {
     private final MySqlConnectionModel dbModel = new MySqlConnectionModel();
+    public static Map<String,Socket> onlineUsers = new HashMap<>();
     
     public void solve(){
         
