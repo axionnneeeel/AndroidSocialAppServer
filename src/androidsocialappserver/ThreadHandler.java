@@ -28,7 +28,7 @@ class ThreadHandler extends Thread {
     private final Socket socket;
     private Connection dbConnection;
     private final int clientNumber;
-    private String loggedUser;
+    private String loggedUser="";
     private Integer loggedUserId;
 
     ThreadHandler(Socket s, int v,Connection DB) {
@@ -64,6 +64,10 @@ class ThreadHandler extends Thread {
                 
                 
                 switch (optionValue) {
+                    case 0:{
+                        System.out.println("Entered login page");
+                        break;
+                    }
                     case 1:
                         {
                             System.out.println("Am primit comanda 1.(LOGIN)");
@@ -101,7 +105,8 @@ class ThreadHandler extends Thread {
                             String username = input.readUTF();
                             String password = input.readUTF();
                             String email = input.readUTF();
-                            System.out.println("Am primit datele: User: "+username+" Password: "+password+" Email: "+password+". Verific in BD.");
+                            output.write(2);
+                            System.out.println("Am primit datele: User: "+username+" Password: "+password+" Email: "+email+". Verific in BD.");
                             String sql = "SELECT * from users WHERE User = ? ";
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
                             statement.setString(1,username);
@@ -135,6 +140,7 @@ class ThreadHandler extends Thread {
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
                             statement.setString(1,this.loggedUser);
                             ResultSet result = statement.executeQuery();
+                            output.write(3);
                             result.next();
                             output.writeUTF(result.getString("User"));
                             output.writeUTF(result.getString("Email"));
@@ -172,6 +178,8 @@ class ThreadHandler extends Thread {
                             String lastName = input.readUTF();
                             String email = input.readUTF();
                             int avatarSize = input.readInt();
+                            output.write(4);
+                            output.flush();
                             String photoName = null;
                             if(avatarSize != 0){
                                 byte[] avatar = new byte[avatarSize];
@@ -255,6 +263,8 @@ class ThreadHandler extends Thread {
                         {
                             System.out.println("Am primit comanda 6.(DELETE USER)");
                             Integer userToBeDeleted = input.readInt();
+                            output.write(6);
+                            output.flush();
                             
                             String sql = "DELETE from friends WHERE idUser = ? AND idFriend = ? ";
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
@@ -273,6 +283,7 @@ class ThreadHandler extends Thread {
                         {
                             System.out.println("Am primit comanda 7.(ADD FRIEND LIST)");
                             String userToBeAdded = input.readUTF();
+                            output.write(7);
                             
                             String sql = "SELECT * from users WHERE User = ? ";
                             PreparedStatement statement = dbConnection.prepareStatement(sql);
@@ -307,6 +318,7 @@ class ThreadHandler extends Thread {
                             System.out.println("Am primit comanda 8.(CHAT)");
                             
                             String userToChat = input.readUTF();
+                            output.write(8);
                             
                             String bdSearch = this.loggedUser+"_"+userToChat;
                             String bdSearch2 = userToChat+"_"+this.loggedUser;
@@ -353,8 +365,11 @@ class ThreadHandler extends Thread {
                         {
                             System.out.println("Am primit comanda 9.(TRIMITERE MESAJ CHAT)");
                             
+                            Integer isEmptyFile = 0;
                             String userToChat = input.readUTF();
                             String message = input.readUTF();
+                            output.write(9);
+                            output.flush();
                             
                             String bdSearch = this.loggedUser+"_"+userToChat;
                             String bdSearch2 = userToChat+"_"+this.loggedUser;
@@ -368,58 +383,29 @@ class ThreadHandler extends Thread {
                             result.next();
                             String conversationPath = result.getString("conversationPath");
                             
+                            BufferedReader br = new BufferedReader(new FileReader(conversationPath));     
+                            if (br.readLine() == null) {
+                                isEmptyFile = 1;
+                            }
                             BufferedWriter writer = null;
                             writer = new BufferedWriter(new FileWriter(conversationPath, true));
-                            writer.write("\n");
+                            if(isEmptyFile == 0)
+                                writer.write("\n");
                             writer.write(this.loggedUser+" "+message);
                             writer.close();
                             
-                            /*for (Map.Entry<String, Socket> entry : Controller.onlineUsers.entrySet()) { 
+                            for (Map.Entry<String, Socket> entry : Controller.onlineUsers.entrySet()) { 
                                 if(entry.getKey().equals(userToChat)){
-                                    System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
                                     DataOutputStream outputClient = new DataOutputStream(entry.getValue().getOutputStream());
+                                    outputClient.write(10);
+                                    outputClient.writeInt(this.loggedUserId);
+                                    outputClient.writeUTF(this.loggedUser);
                                     outputClient.writeUTF(message);
                                     outputClient.flush();
                                     
                                 }
-                            }*/
-                            
-                            break;
-                        }
-                    case 10:
-                        {
-                            System.out.println("Am primit comanda 10.(ACTUALIZARE CHAT)");
-                            
-                            String userToChat = input.readUTF();
-                            Integer numberOfMessages = input.readInt();
-                            
-                            String bdSearch = this.loggedUser+"_"+userToChat;
-                            String bdSearch2 = userToChat+"_"+this.loggedUser;
-                            
-                            String sql = "SELECT * from conversations WHERE usersname = ? or usersname = ?";
-                            PreparedStatement statement = dbConnection.prepareStatement(sql);
-                            statement.setString(1,bdSearch);
-                            statement.setString(2, bdSearch2);
-                            ResultSet result = statement.executeQuery();
-                            
-                            result.next();
-                            String conversationPath = result.getString("conversationPath");
-                            List<String> myConversation = new ArrayList<>();
-                            try (BufferedReader br = new BufferedReader(new FileReader(conversationPath))) {
-                                String line;
-                                while ((line = br.readLine()) != null) {
-                                   myConversation.add(line);
-                                }
                             }
-
                             
-                            output.writeInt(myConversation.size() - numberOfMessages);
-                            if(myConversation.size() - numberOfMessages > 0){
-                                for(int i=numberOfMessages;i<myConversation.size();i++)
-                                    output.writeUTF(myConversation.get(i));
-                            }
-                               
-                            output.flush();
                             break;
                         }
                     default:

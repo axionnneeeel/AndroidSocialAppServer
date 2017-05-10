@@ -40,6 +40,7 @@ public class Controller {
                 System.out.println("New client connected, creating separate thread..");
                 Thread t = new ThreadHandler(newsock,nreq,dbModel.getConection());
                 t.start();
+                nreq++;
             }
         }
         catch (IOException e)
