@@ -113,7 +113,7 @@ class ThreadHandler extends Thread {
                             ResultSet result = statement.executeQuery();
                             if (result.isBeforeFirst() ) {
                                 output.write(0);
-                                System.out.println("Nu am gasit userul in DB. Incerc inregistrarea.");
+                                System.out.println("Userul deja exista in BD.");
                             }
                             else {
                                 sql = "INSERT INTO users(User,Password,Email) VALUES (?,?,?) ";
@@ -124,7 +124,7 @@ class ThreadHandler extends Thread {
                                 int rows = statementRegister.executeUpdate();
                                 if(rows < 1){
                                     output.write(0);
-                                    System.out.println("Userul deja exista in DB.");
+                                    System.out.println("Nu s-a inserat in BD.");
                                 }
                                 else{
                                     output.write(1);
@@ -152,18 +152,26 @@ class ThreadHandler extends Thread {
                             else output.writeUTF("");
                             if(result.getString("Avatar") != null){
                                 String avatarPath = result.getString("Avatar");
-                                byte[] imageInByte;
-                                BufferedImage originalImage = ImageIO.read(new File(avatarPath));
-                                try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                                    ImageIO.write(originalImage, "jpg", baos);
-                                    baos.flush();
-                                    imageInByte = baos.toByteArray();
-                                }
                                 
-                                int avatarLength = imageInByte.length;
-                                output.writeInt(avatarLength);
-                                output.write(imageInByte, 0, avatarLength);
-                                output.flush();
+                                if(!avatarPath.contains("http")){
+                                    byte[] imageInByte;
+                                    BufferedImage originalImage = ImageIO.read(new File(avatarPath));
+                                    try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                                        ImageIO.write(originalImage, "jpg", baos);
+                                        baos.flush();
+                                        imageInByte = baos.toByteArray();
+                                    }
+
+                                    int avatarLength = imageInByte.length;
+                                    output.writeInt(avatarLength);
+                                    output.write(imageInByte, 0, avatarLength);
+                                    output.flush();
+                                }
+                                else{
+                                    output.writeInt(-1);
+                                    output.writeUTF(avatarPath);
+                                    output.flush();
+                                }
                             }
                             else {
                                 output.writeInt(0);
@@ -181,7 +189,7 @@ class ThreadHandler extends Thread {
                             output.write(4);
                             output.flush();
                             String photoName = null;
-                            if(avatarSize != 0){
+                            if(avatarSize != 0 && avatarSize != -1){
                                 byte[] avatar = new byte[avatarSize];
                                 input.readFully(avatar, 0, avatarSize);
 
@@ -193,8 +201,20 @@ class ThreadHandler extends Thread {
                                 ImageIO.write(bImageFromConvert, "jpg", new File(
                                                 photoName));
                             }
+                            if(avatarSize == -1){
+                                photoName = input.readUTF();
+                            }
                             
-                            if(avatarSize != 0){
+                            if(avatarSize != 0 && avatarSize != -1){
+                                String sql = "UPDATE users SET Firstname=?,Lastname=?,Email=?,Avatar=? WHERE User = ? ";
+                                PreparedStatement statement = dbConnection.prepareStatement(sql);
+                                statement.setString(1,firstName);
+                                statement.setString(2,lastName);
+                                statement.setString(3,email);
+                                statement.setString(4, photoName);
+                                statement.setString(5,this.loggedUser);
+                                statement.executeUpdate();
+                            }else if(avatarSize == -1){
                                 String sql = "UPDATE users SET Firstname=?,Lastname=?,Email=?,Avatar=? WHERE User = ? ";
                                 PreparedStatement statement = dbConnection.prepareStatement(sql);
                                 statement.setString(1,firstName);
